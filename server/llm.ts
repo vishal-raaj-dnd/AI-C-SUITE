@@ -82,68 +82,89 @@ export type LLMResult = {
 
 export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
   const modelName = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
+  const geminiApiKey = process.env.GEMINI_API_KEY;
   const startTime = Date.now();
 
-  if (!hasApiKey) {
-    throw new Error('OPENROUTER_API_KEY is not configured in .env.');
-  }
+  let text = '';
+  let tokensIn = 0;
+  let tokensOut = 0;
+  const costUsd = 0;
 
   try {
-    const messages = [];
-    if (opts.system) {
-      messages.push({ role: 'system', content: opts.system });
+    if (geminiApiKey && geminiApiKey.trim().length > 0) {
+      // Direct Google Gemini SDK execution
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
+
+      const response = await ai.models.generateContent({
+        model: cleanModel,
+        contents: opts.prompt,
+        config: {
+          systemInstruction: opts.system,
+          responseMimeType: opts.schema ? 'application/json' : 'text/plain',
+          maxOutputTokens: opts.maxTokens,
+          temperature: 0.2
+        }
+      });
+      text = response.text || '';
+    } else {
+      // OpenRouter API execution
+      if (!hasApiKey) {
+        throw new Error('OPENROUTER_API_KEY is not configured in .env.');
+      }
+      const messages = [];
+      if (opts.system) {
+        messages.push({ role: 'system', content: opts.system });
+      }
+      messages.push({ role: 'user', content: opts.prompt });
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openRouterApiKey}`,
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'Quorum Board Decision Platform'
+      };
+
+      const body: any = {
+        model: modelName,
+        messages,
+        temperature: 0.2
+      };
+
+      if (opts.maxTokens) {
+        body.max_tokens = opts.maxTokens;
+      }
+
+      if (opts.schema) {
+        body.response_format = { type: 'json_object' };
+      }
+
+      // Abort after 30s to prevent pipeline hangs
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+      }
+
+      const resJson = await response.json();
+      text = resJson.choices?.[0]?.message?.content || '';
+      tokensIn = resJson.usage?.prompt_tokens || 0;
+      tokensOut = resJson.usage?.completion_tokens || 0;
     }
-    messages.push({ role: 'user', content: opts.prompt });
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${openRouterApiKey}`,
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'Quorum Board Decision Platform'
-    };
-
-    const body: any = {
-      model: modelName,
-      messages,
-      temperature: 0.2
-    };
-
-    if (opts.maxTokens) {
-      body.max_tokens = opts.maxTokens;
-    }
-
-    if (opts.schema) {
-      body.response_format = { type: 'json_object' };
-    }
-
-    // Abort after 30s to prevent pipeline hangs
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
-    }
-
-    const resJson = await response.json();
-    const text = resJson.choices?.[0]?.message?.content || '';
-    
     const endTime = Date.now();
     const latencyMs = endTime - startTime;
-
-    const tokensIn = resJson.usage?.prompt_tokens || 0;
-    const tokensOut = resJson.usage?.completion_tokens || 0;
-    const costUsd = 0; // free tier model has 0 cost
-
     const currentRetryCount = opts.retryCount || 0;
 
     let parsed: any = undefined;
