@@ -1,0 +1,8 @@
+{
+  "name": "Quorum UI Replication",
+  "description": "A pixel-perfect UI replication of the Quorum decision-making dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
