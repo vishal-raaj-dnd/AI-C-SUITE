@@ -1,5 +1,5 @@
-import { initDatabase, retrieveKb } from './db';
-import { DebateOrchestrator } from './orchestrator';
+import { initDatabase, retrieveKb } from './db.js';
+import { DebateOrchestrator } from './orchestrator.js';
 
 async function test() {
   console.log('--- Initializing Database ---');
