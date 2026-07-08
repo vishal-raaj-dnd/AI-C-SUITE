@@ -1,5 +1,5 @@
-import { callLLM } from './llm';
-import { db } from './db';
+import { callLLM } from './llm.js';
+import { db } from './db.js';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 

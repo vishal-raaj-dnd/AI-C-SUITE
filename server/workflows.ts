@@ -1,6 +1,6 @@
-import { callLLM, InitialBriefSchema, CardOutputSchema, ContrarianCardOutputSchema } from './llm';
-import { retrieveKb } from './db';
-import { webSearch, tableQuery, drLookup } from './tools';
+import { callLLM, InitialBriefSchema, CardOutputSchema, ContrarianCardOutputSchema } from './llm.js';
+import { retrieveKb } from './db.js';
+import { webSearch, tableQuery, drLookup } from './tools.js';
 
 const activeModel = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
 

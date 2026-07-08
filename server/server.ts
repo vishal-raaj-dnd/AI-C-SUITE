@@ -1,9 +1,9 @@
 import express from 'express';
-import { db, initDatabase, indexDocument } from './db';
+import { db, initDatabase, indexDocument } from './db.js';
 import fs from 'fs';
 import path from 'path';
-import { DebateOrchestrator } from './orchestrator';
-import { callLLM, CardOutputSchema } from './llm';
+import { DebateOrchestrator } from './orchestrator.js';
+import { callLLM, CardOutputSchema } from './llm.js';
 import { z } from 'zod';
 
 const app = express();

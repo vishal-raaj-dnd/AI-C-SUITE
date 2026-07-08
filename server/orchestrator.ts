@@ -1,6 +1,6 @@
-import { callLLM, IntakeResultSchema } from './llm';
-import { runPhase1, runPhase2, runContrarian, InitialBrief, AdvisorCardOutput } from './workflows';
-import { db } from './db';
+import { callLLM, IntakeResultSchema } from './llm.js';
+import { runPhase1, runPhase2, runContrarian, InitialBrief, AdvisorCardOutput } from './workflows.js';
+import { db } from './db.js';
 import EventEmitter from 'events';
 
 const activeModel = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
