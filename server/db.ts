@@ -20,7 +20,9 @@ async function querySupabaseRest(method: string, path: string, body?: any): Prom
     'apikey': process.env.SUPABASE_ANON_KEY || '',
     'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
     'Content-Type': 'application/json',
-    'Prefer': 'return=representation'
+    'Prefer': method === 'POST' && path.includes('on_conflict')
+      ? 'return=representation,resolution=merge-duplicates'
+      : 'return=representation'
   };
   const res = await fetch(url, {
     method,
@@ -82,7 +84,8 @@ async function translateSqlToRest(sql: string, params: any[]): Promise<any> {
 
   // 3. INSERT / REPLACE
   if (cleanSql.startsWith('insert')) {
-    const table = sql.match(/insert\s+(?:or\s+replace\s+)?into\s+(\w+)/i)?.[1];
+    const isUpsert = cleanSql.includes('or replace') || cleanSql.includes('or ignore');
+    const table = sql.match(/insert\s+(?:or\s+replace\s+)?(?:or\s+ignore\s+)?into\s+(\w+)/i)?.[1];
     const columnsStr = sql.match(/\(([^)]+)\)/)?.[1];
     if (table && columnsStr) {
       const columns = columnsStr.split(',').map(c => c.trim());
@@ -90,7 +93,9 @@ async function translateSqlToRest(sql: string, params: any[]): Promise<any> {
       columns.forEach((col, idx) => {
         body[col] = params[idx];
       });
-      const res = await querySupabaseRest('POST', table, body);
+      // Use upsert header for INSERT OR REPLACE
+      const upsertPath = isUpsert ? `${table}?on_conflict=id` : table;
+      const res = await querySupabaseRest('POST', upsertPath, body);
       return res;
     }
   }

@@ -11,10 +11,21 @@ const port = process.env.PORT || 3001;
 
 app.use(express.json());
 
-// Initialize DB on boot
-initDatabase().catch(err => {
-  console.error('Failed to initialize database:', err);
+// CORS for Vercel
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-user-id');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
 });
+
+// Initialize DB on boot (skip heavy init on Vercel — tables are in Supabase)
+if (!process.env.VERCEL) {
+  initDatabase().catch(err => {
+    console.error('Failed to initialize database:', err);
+  });
+}
 
 // Supabase replication service using service role credentials
 async function syncToSupabase(table: string, payload: any) {
@@ -603,6 +614,12 @@ app.delete('/api/canvases/:id', async (req, res) => {
 });
 
 export default app;
+
+// Global error handler — always return JSON, never raw text
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Unhandled server error:', err);
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
 
 if (!process.env.VERCEL) {
   app.listen(port, () => {
