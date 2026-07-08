@@ -162,15 +162,19 @@ export default function App() {
           onDeleteCanvas={handleDeleteCanvas}
         />
         
-        {currentView === 'canvas' && (
+        <div style={{ display: currentView === 'canvas' ? 'contents' : 'none' }}>
           <Canvas 
             canvasId={activeCanvasId}
             initialQuestion={activeCanvasQuestion} 
             userId={userId}
           />
-        )}
-        {currentView === 'knowledge' && <KnowledgeBase userId={userId} />}
-        {currentView === 'decisions' && <DecisionRecords userId={userId} />}
+        </div>
+        <div style={{ display: currentView === 'knowledge' ? 'contents' : 'none' }}>
+          <KnowledgeBase userId={userId} />
+        </div>
+        <div style={{ display: currentView === 'decisions' ? 'contents' : 'none' }}>
+          <DecisionRecords userId={userId} />
+        </div>
       </div>
     </div>
   );
