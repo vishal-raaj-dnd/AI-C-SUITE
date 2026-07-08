@@ -5,6 +5,7 @@ import { Canvas } from './components/Canvas';
 import { KnowledgeBase } from './components/KnowledgeBase';
 import { DecisionRecords } from './components/DecisionRecords';
 import { Login } from './components/Login';
+import { API_BASE } from './utils/api';
 
 type CanvasData = {
   id: string;
@@ -29,7 +30,7 @@ export default function App() {
 
   const fetchCanvases = async () => {
     try {
-      const response = await fetch('/api/canvases', {
+      const response = await fetch(`${API_BASE}/api/canvases`, {
         headers: { 'x-user-id': userId }
       });
       const data = await response.json();
@@ -79,7 +80,7 @@ export default function App() {
     if (!question) return;
 
     try {
-      const response = await fetch('/api/canvases', {
+      const response = await fetch(`${API_BASE}/api/canvases`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

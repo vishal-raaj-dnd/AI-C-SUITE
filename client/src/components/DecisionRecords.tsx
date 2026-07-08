@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Calendar, ShieldAlert, Book, Sparkles, X, ChevronRight } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
 type DecisionRecord = {
   id: string;
@@ -20,7 +21,7 @@ export function DecisionRecords({ userId }: { userId: string }) {
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/decision-records', {
+      const response = await fetch(`${API_BASE}/api/decision-records`, {
         headers: { 'x-user-id': userId }
       });
       const data = await response.json();

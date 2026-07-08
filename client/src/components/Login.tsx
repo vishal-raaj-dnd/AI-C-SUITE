@@ -21,7 +21,8 @@ export function Login({ onLoginSuccess }: LoginProps) {
     const endpoint = isSignUp ? '/api/auth/signup' : '/api/auth/login';
     
     try {
-      const response = await fetch(endpoint, {
+      const { API_BASE } = await import('../utils/api');
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })

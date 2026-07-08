@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, FileText, Upload, Plus, X, Folder, Eye, Trash2 } from 'lucide-react';
+import { API_BASE } from '../utils/api';
 
 type Document = {
   id: string;
@@ -24,7 +25,7 @@ export function KnowledgeBase({ userId }: { userId: string }) {
   const fetchDocuments = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/kb/documents', {
+      const response = await fetch(`${API_BASE}/api/kb/documents`, {
         headers: { 'x-user-id': userId }
       });
       const data = await response.json();
@@ -57,7 +58,7 @@ export function KnowledgeBase({ userId }: { userId: string }) {
         reader.readAsText(selectedFile);
       });
 
-      const response = await fetch('/api/kb/upload', {
+      const response = await fetch(`${API_BASE}/api/kb/upload`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -90,10 +91,10 @@ export function KnowledgeBase({ userId }: { userId: string }) {
     setPreviewContent('');
     try {
       // Re-use debate retrieval path or custom endpoint, but we can fetch details from debate:
-      const res = await fetch(`/api/debates/mock_doc_id`); // Wait, we can fetch all details from a general doc loader or by retrieving the file:
+      const res = await fetch(`${API_BASE}/api/debates/mock_doc_id`); // Wait, we can fetch all details from a general doc loader or by retrieving the file:
       // Since it's a demo, we can fetch the doc content from the server if we add a GET /api/kb/documents/:id, or we can just mock a nice content review or query it.
       // Let's add GET /api/kb/documents/:id endpoint to the server, or we can write a simple document detail endpoint!
-      const resDoc = await fetch(`/api/kb/documents/${doc.id}`);
+      const resDoc = await fetch(`${API_BASE}/api/kb/documents/${doc.id}`);
       const data = await resDoc.json();
       if (resDoc.ok) {
         setPreviewContent(data.content);
@@ -111,7 +112,7 @@ export function KnowledgeBase({ userId }: { userId: string }) {
     if (!confirm(`Are you sure you want to delete "${doc.filename}"? This will physically remove it and un-index it from SQLite.`)) return;
 
     try {
-      const res = await fetch(`/api/kb/documents/${doc.id}`, { 
+      const res = await fetch(`${API_BASE}/api/kb/documents/${doc.id}`, { 
         method: 'DELETE',
         headers: { 'x-user-id': userId }
       });

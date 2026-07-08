@@ -7,6 +7,7 @@ import {
   X, MessageSquare, Save, Info, AlertTriangle, Cpu
 } from 'lucide-react';
 import { AdvisorCard } from './AdvisorCard';
+import { API_BASE } from '../utils/api';
 
 type CardState = {
   advisor_id: string;
@@ -121,7 +122,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
       setIsAnalyzing(false);
 
       try {
-        const response = await fetch(`/api/debates/deb_${canvasId}`);
+        const response = await fetch(`${API_BASE}/api/debates/deb_${canvasId}`);
         if (response.ok) {
           const data = await response.json();
           if (data.cards && data.cards.length > 0) {
@@ -356,7 +357,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
     });
 
     try {
-      const response = await fetch('/api/debates', {
+      const response = await fetch(`${API_BASE}/api/debates`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -375,7 +376,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
         setStatusMessage('Debate is processing on the server...');
         const pollInterval = setInterval(async () => {
           try {
-            const pollRes = await fetch(`/api/debates/${id}`);
+            const pollRes = await fetch(`${API_BASE}/api/debates/${id}`);
             if (pollRes.ok) {
               const pollData = await pollRes.json();
               
@@ -470,7 +471,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
       }
 
       // Local mode: Listen to SSE Stream
-      const eventSource = new EventSource(`/api/debates/${id}/stream?userId=${userId}`);
+      const eventSource = new EventSource(`${API_BASE}/api/debates/${id}/stream?userId=${userId}`);
       
       eventSource.onmessage = (event) => {
         if (event.data === '[DONE]') {
@@ -588,7 +589,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
         // Poll the debate endpoint to recover completed cards instead of losing state
         const pollRecovery = async () => {
           try {
-            const recoverRes = await fetch(`/api/debates/${id}`);
+            const recoverRes = await fetch(`${API_BASE}/api/debates/${id}`);
             if (recoverRes.ok) {
               const recoverData = await recoverRes.json();
               if (recoverData.status === 'complete' && recoverData.cards && recoverData.cards.length > 0) {
@@ -650,7 +651,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
     setCrossChatTranscript([]);
 
     try {
-      const response = await fetch('/api/cross-chat', {
+      const response = await fetch(`${API_BASE}/api/cross-chat`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -683,7 +684,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
     setIsCrossChatLoading(true);
 
     try {
-      const response = await fetch('/api/cross-chat/merge', {
+      const response = await fetch(`${API_BASE}/api/cross-chat/merge`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -811,7 +812,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
     }
 
     try {
-      const response = await fetch('/api/decision-records', {
+      const response = await fetch(`${API_BASE}/api/decision-records`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
