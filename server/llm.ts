@@ -83,6 +83,7 @@ export type LLMResult = {
 export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
   const modelName = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
   const geminiApiKey = process.env.GEMINI_API_KEY;
+  const groqApiKey = process.env.GROQ_API_KEY;
   const startTime = Date.now();
 
   let text = '';
@@ -107,6 +108,55 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
         }
       });
       text = response.text || '';
+    } else if (groqApiKey && groqApiKey.trim().length > 0) {
+      // Direct Groq API execution (OpenAI-compatible)
+      const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+      const messages = [];
+      if (opts.system) {
+        messages.push({ role: 'system', content: opts.system });
+      }
+      messages.push({ role: 'user', content: opts.prompt });
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${groqApiKey}`
+      };
+
+      const body: any = {
+        model,
+        messages,
+        temperature: 0.2
+      };
+
+      if (opts.maxTokens) {
+        body.max_tokens = opts.maxTokens;
+      }
+
+      if (opts.schema) {
+        body.response_format = { type: 'json_object' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Groq API error: ${response.status} - ${errorText}`);
+      }
+
+      const resJson = await response.json();
+      text = resJson.choices?.[0]?.message?.content || '';
+      tokensIn = resJson.usage?.prompt_tokens || 0;
+      tokensOut = resJson.usage?.completion_tokens || 0;
     } else {
       // OpenRouter API execution
       if (!hasApiKey) {
