@@ -11,11 +11,33 @@ export class DebateOrchestrator extends EventEmitter {
   private userId: string;
   private totalCostUsd: number = 0;
 
-  constructor(debateId: string, question: string, userId?: string) {
+  constructor(dbPathOrId: string, question: string, userId?: string) {
     super();
-    this.debateId = debateId;
+    this.debateId = dbPathOrId;
     this.question = question;
     this.userId = userId || 'default_user';
+  }
+
+  // Override emit to sync status to database automatically for Vercel polling
+  override emit(event: string | symbol, ...args: any[]): boolean {
+    if (event === 'status' && args[0]) {
+      const { step, message, error } = args[0];
+      let dbStatus = '';
+      if (step === 'debate_complete') {
+        dbStatus = 'complete';
+      } else if (step === 'failed') {
+        dbStatus = 'failed';
+      } else {
+        dbStatus = error ? `failed: ${error}` : message ? `running: ${message}` : `running: Processing ${step}...`;
+      }
+      db.run(
+        `UPDATE debates SET status = ?, cost_usd = ? WHERE id = ?`,
+        [dbStatus, this.totalCostUsd, this.debateId]
+      ).catch(err => {
+        console.error('Failed to sync status to DB:', err.message || err);
+      });
+    }
+    return super.emit(event, ...args);
   }
 
   async run() {
@@ -36,10 +58,6 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
       const intake = intakeRes.parsed || { classification: 'General Query', entities: [], time_horizon: 'short-term' };
       
       this.emit('status', { step: 'intake_done', data: intake });
-      await db.run(
-        `UPDATE debates SET status = 'running', cost_usd = ? WHERE id = ?`,
-        [this.totalCostUsd, this.debateId]
-      );
 
       // Save initial trace node
       const intakeTrace = {
@@ -190,12 +208,6 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
         steps: c.trace
       }));
 
-      await db.run(`
-        UPDATE debates 
-        SET status = 'complete', cost_usd = ? 
-        WHERE id = ?
-      `, [this.totalCostUsd, this.debateId]);
-
       // Write traces into a JSON file or trace table if we want, or just emit it
       this.emit('status', { 
         step: 'debate_complete', 
@@ -206,7 +218,6 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
 
     } catch (err: any) {
       console.error('Debate run crashed:', err);
-      await db.run(`UPDATE debates SET status = 'failed' WHERE id = ?`, [this.debateId]);
       this.emit('status', { step: 'failed', error: err.message || err });
     }
   }

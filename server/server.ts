@@ -79,8 +79,14 @@ app.post('/api/auth/signup', async (req, res) => {
     // Seed initial default canvases for new users so canvas is not empty
     const canvasId1 = `can_${Date.now()}_1`;
     const canvasId2 = `can_${Date.now()}_2`;
-    await db.run(`INSERT INTO canvases (id, user_id, title, question, created_at) VALUES (?, ?, 'Freemium Launch Decision', 'Should we launch a freemium tier?', ?)`, [canvasId1, userId, new Date().toISOString()]);
-    await db.run(`INSERT INTO canvases (id, user_id, title, question, created_at) VALUES (?, ?, 'Q2 Pricing Strategy', 'How should we adjust pricing for enterprise tiers?', ?)`, [canvasId2, userId, new Date(Date.now() - 172800000).toISOString()]);
+    await db.run(
+      `INSERT INTO canvases (id, user_id, title, question, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [canvasId1, userId, 'Freemium Launch Decision', 'Should we launch a freemium tier?', new Date().toISOString()]
+    );
+    await db.run(
+      `INSERT INTO canvases (id, user_id, title, question, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [canvasId2, userId, 'Q2 Pricing Strategy', 'How should we adjust pricing for enterprise tiers?', new Date(Date.now() - 172800000).toISOString()]
+    );
 
     await syncToSupabase('canvases', { id: canvasId1, user_id: userId, title: 'Freemium Launch Decision', question: 'Should we launch a freemium tier?', created_at: new Date().toISOString() });
     await syncToSupabase('canvases', { id: canvasId2, user_id: userId, title: 'Q2 Pricing Strategy', question: 'How should we adjust pricing for enterprise tiers?', created_at: new Date(Date.now() - 172800000).toISOString() });

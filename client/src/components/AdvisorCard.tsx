@@ -20,6 +20,61 @@ interface AdvisorCardProps {
   claims?: { text: string; evidence: { type: string; ref?: string } }[];
 }
 
+function parseInlineStyles(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={idx} className="font-extrabold text-gray-900">{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+function parseMarkdownToReact(text: string): React.ReactNode {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return (
+    <div className="space-y-1.5 mb-4">
+      {lines.map((line, idx) => {
+        const cleanLine = line.trim();
+        
+        if (cleanLine.startsWith('### ')) {
+          return <h4 key={idx} className="font-bold text-gray-900 text-xs mt-3 mb-1">{parseInlineStyles(cleanLine.substring(4))}</h4>;
+        }
+        if (cleanLine.startsWith('## ')) {
+          return <h3 key={idx} className="font-bold text-gray-900 text-sm mt-3 mb-1">{parseInlineStyles(cleanLine.substring(3))}</h3>;
+        }
+        if (cleanLine.startsWith('# ')) {
+          return <h2 key={idx} className="font-bold text-gray-900 text-base mt-4 mb-2">{parseInlineStyles(cleanLine.substring(2))}</h2>;
+        }
+        if (cleanLine.startsWith('- ') || cleanLine.startsWith('* ')) {
+          return (
+            <ul key={idx} className="list-disc pl-4 text-[11px] text-gray-600 leading-relaxed">
+              <li>{parseInlineStyles(cleanLine.substring(2))}</li>
+            </ul>
+          );
+        }
+        const numMatch = cleanLine.match(/^(\d+)\.\s+(.*)/);
+        if (numMatch) {
+          return (
+            <ol key={idx} className="list-decimal pl-4 text-[11px] text-gray-600 leading-relaxed">
+              <li>{parseInlineStyles(numMatch[2])}</li>
+            </ol>
+          );
+        }
+        if (cleanLine === '') {
+          return <div key={idx} className="h-1.5" />;
+        }
+        return (
+          <p key={idx} className="text-[11px] text-gray-600 leading-relaxed">
+            {parseInlineStyles(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AdvisorCard({
   role,
   title,
@@ -91,9 +146,13 @@ export function AdvisorCard({
             </div>
           ) : (
             <>
-              <p className="text-xs text-gray-600 leading-relaxed mb-4 whitespace-pre-line">
-                {description || 'No analysis compiled yet. Run a debate query to begin.'}
-              </p>
+              {description ? (
+                parseMarkdownToReact(description)
+              ) : (
+                <p className="text-xs text-gray-600 leading-relaxed mb-4">
+                  No analysis compiled yet. Run a debate query to begin.
+                </p>
+              )}
 
               {/* Claims / Citation Chips */}
               {claims.length > 0 && (

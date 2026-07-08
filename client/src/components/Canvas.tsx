@@ -378,31 +378,85 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
             const pollRes = await fetch(`/api/debates/${id}`);
             if (pollRes.ok) {
               const pollData = await pollRes.json();
-              if (pollData.status === 'complete' && pollData.cards && pollData.cards.length > 0) {
-                clearInterval(pollInterval);
-                const loadedCards: Record<string, CardState> = { ...defaultCards() };
-                for (const c of pollData.cards) {
-                  loadedCards[c.advisor_id] = {
-                    advisor_id: c.advisor_id,
-                    verdict: c.verdict || '',
-                    body_md: c.body_md || '',
-                    claims: c.claims || [],
-                    assumptions: c.assumptions || [],
-                    confidence: c.confidence || 'Grounded',
-                    status: 'complete',
-                    statusText: 'Analysis compiled'
-                  };
+              
+              // 1. Update status message dynamically
+              const statusStr = pollData.status || '';
+              if (statusStr.startsWith('running: ')) {
+                setStatusMessage(statusStr.substring(9));
+              } else {
+                setStatusMessage(statusStr);
+              }
+
+              // 2. Load any cards completed so far
+              if (pollData.cards && pollData.cards.length > 0) {
+                setCards(prev => {
+                  const next = { ...prev };
+                  for (const c of pollData.cards) {
+                    next[c.advisor_id] = {
+                      advisor_id: c.advisor_id,
+                      verdict: c.verdict || '',
+                      body_md: c.body_md || '',
+                      claims: c.claims || [],
+                      assumptions: c.assumptions || [],
+                      confidence: c.confidence || 'Grounded',
+                      status: 'complete',
+                      statusText: c.advisor_id === 'contrarian' ? 'Critique compiled' : 'Analysis compiled'
+                    };
+                  }
+                  return next;
+                });
+                
+                if (pollData.cost_usd) {
+                  setCostMeter(pollData.cost_usd);
                 }
-                setCards(loadedCards);
+
                 const loadedTraces = pollData.cards.map((c: any) => ({
                   advisor_id: c.advisor_id,
                   steps: c.trace || []
                 }));
                 setTraces(loadedTraces);
-                setCostMeter(pollData.cost_usd || 0);
+              }
+
+              // 3. Update status of cards currently running
+              if (statusStr.includes('phase1_')) {
+                setCards(prev => {
+                  const next = { ...prev };
+                  ['cmo', 'cfo', 'cto', 'coo'].forEach(k => {
+                    if (next[k].status !== 'complete') {
+                      next[k].status = 'running';
+                      next[k].statusText = 'Investigating KB...';
+                    }
+                  });
+                  return next;
+                });
+              } else if (statusStr.includes('phase2_')) {
+                setCards(prev => {
+                  const next = { ...prev };
+                  ['cmo', 'cfo', 'cto', 'coo'].forEach(k => {
+                    if (next[k].status !== 'complete') {
+                      next[k].status = 'running';
+                      next[k].statusText = 'Coordinated synthesis...';
+                    }
+                  });
+                  return next;
+                });
+              } else if (statusStr.includes('contrarian_') || statusStr.includes('contrarian')) {
+                setCards(prev => {
+                  const next = { ...prev };
+                  if (next.contrarian.status !== 'complete') {
+                    next.contrarian.status = 'running';
+                    next.contrarian.statusText = 'Analyzing consensus...';
+                  }
+                  return next;
+                });
+              }
+
+              // 4. Check for final completion
+              if (statusStr === 'complete') {
+                clearInterval(pollInterval);
                 setIsAnalyzing(false);
                 setStatusMessage('Debate complete!');
-              } else if (pollData.status === 'failed') {
+              } else if (statusStr === 'failed') {
                 clearInterval(pollInterval);
                 setIsAnalyzing(false);
                 setStatusMessage('Debate failed on the server.');
@@ -411,7 +465,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
           } catch (pollErr) {
             console.error('Polling error:', pollErr);
           }
-        }, 3000);
+        }, 2500);
         return;
       }
 
@@ -1262,6 +1316,16 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
                 Save Decision & Index
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pipeline Progress Toast */}
+      {isAnalyzing && statusMessage && (
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 w-full max-w-3xl px-4 sm:px-0 z-20 md:pl-64">
+          <div className="bg-slate-900/95 text-white text-xs font-semibold px-5 py-3.5 rounded-2xl border border-slate-800 shadow-2xl flex items-center gap-3 backdrop-blur w-fit mx-auto transition-all animate-pulse">
+            <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+            <span className="tracking-wide text-slate-200">{statusMessage}</span>
           </div>
         </div>
       )}
