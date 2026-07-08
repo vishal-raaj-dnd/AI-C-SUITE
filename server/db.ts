@@ -1,17 +1,168 @@
-import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import path from 'path';
 
+let DatabaseClass: any = null;
+try {
+  // Only load native sqlite3 bindings when not running in Vercel/serverless environments
+  if (!process.env.VERCEL) {
+    DatabaseClass = require('sqlite3').Database;
+  }
+} catch (e) {
+  console.warn('SQLite3 driver failed to load. Operating in Cloud-only Supabase REST mode.');
+}
+
+async function querySupabaseRest(method: string, path: string, body?: any): Promise<any> {
+  const url = `${process.env.SUPABASE_URL}/rest/v1/${path}`;
+  const headers: Record<string, string> = {
+    'apikey': process.env.SUPABASE_ANON_KEY || '',
+    'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY || ''}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+  const res = await fetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Supabase REST failed: ${res.status} - ${txt}`);
+  }
+  if (method === 'DELETE' || res.status === 204) return [];
+  return res.json();
+}
+
+async function translateSqlToRest(sql: string, params: any[]): Promise<any> {
+  const cleanSql = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+
+  // 1. SELECT COUNT
+  if (cleanSql.includes('select count(*)')) {
+    const table = cleanSql.match(/from\s+(\w+)/)?.[1];
+    const data = await querySupabaseRest('GET', `${table}?select=id`);
+    return { count: data.length };
+  }
+
+  // 2. SELECT WHERE
+  if (cleanSql.startsWith('select')) {
+    const table = cleanSql.match(/from\s+(\w+)/)?.[1];
+    let queryParams = '';
+    
+    if (cleanSql.includes('email = ? and password = ?')) {
+      queryParams = `email=eq.${encodeURIComponent(params[0])}&password=eq.${encodeURIComponent(params[1])}`;
+    } else if (cleanSql.includes('debate_id = ?')) {
+      queryParams = `debate_id=eq.${params[0]}`;
+    } else if (cleanSql.includes('user_id = ? or user_id = \'default_user\'')) {
+      queryParams = `or=(user_id.eq.${params[0]},user_id.eq.default_user,user_id.eq.can_seed)`;
+    } else if (cleanSql.includes('user_id = ?')) {
+      queryParams = `user_id=eq.${params[0]}`;
+    } else if (cleanSql.includes('id = ? and user_id = ?')) {
+      queryParams = `id=eq.${params[0]}&user_id=eq.${params[1]}`;
+    } else if (cleanSql.includes('id = ?')) {
+      queryParams = `id=eq.${params[0]}`;
+    } else if (cleanSql.includes('document_id = ?')) {
+      queryParams = `document_id=eq.${params[0]}`;
+    }
+
+    let selectParam = '*';
+    if (cleanSql.includes('select content from')) {
+      selectParam = 'content';
+    } else if (cleanSql.includes('select filename, scope_tag from')) {
+      selectParam = 'filename,scope_tag';
+    } else if (cleanSql.includes('select id, filename, scope_tag, created_at from')) {
+      selectParam = 'id,filename,scope_tag,created_at';
+    }
+
+    const path = queryParams ? `${table}?select=${selectParam}&${queryParams}` : `${table}?select=${selectParam}`;
+    const results = await querySupabaseRest('GET', path);
+    return results;
+  }
+
+  // 3. INSERT / REPLACE
+  if (cleanSql.startsWith('insert')) {
+    const table = sql.match(/insert\s+(?:or\s+replace\s+)?into\s+(\w+)/i)?.[1];
+    const columnsStr = sql.match(/\(([^)]+)\)/)?.[1];
+    if (table && columnsStr) {
+      const columns = columnsStr.split(',').map(c => c.trim());
+      const body: Record<string, any> = {};
+      columns.forEach((col, idx) => {
+        body[col] = params[idx];
+      });
+      const res = await querySupabaseRest('POST', table, body);
+      return res;
+    }
+  }
+
+  // 4. UPDATE
+  if (cleanSql.startsWith('update')) {
+    const table = sql.match(/update\s+(\w+)/i)?.[1];
+    if (table) {
+      const setPart = sql.match(/set\s+([\s\S]+?)\s+where/i)?.[1];
+      const wherePart = sql.match(/where\s+([\s\S]+)$/i)?.[1];
+      if (setPart && wherePart) {
+        const columns = setPart.split(',').map(part => part.split('=')[0].trim());
+        const body: Record<string, any> = {};
+        columns.forEach((col, idx) => {
+          body[col] = params[idx];
+        });
+        
+        const filterVal = params[params.length - 1];
+        const filterCol = wherePart.split('=')[0].trim();
+        const queryParams = `${filterCol}=eq.${filterVal}`;
+        return await querySupabaseRest('PATCH', `${table}?${queryParams}`, body);
+      }
+    }
+  }
+
+  // 5. DELETE
+  if (cleanSql.startsWith('delete')) {
+    const table = sql.match(/from\s+(\w+)/i)?.[1];
+    const wherePart = sql.match(/where\s+([\s\S]+)$/i)?.[1];
+    if (table && wherePart) {
+      let queryParams = '';
+      if (cleanSql.includes('id = ? and user_id = ?')) {
+        queryParams = `id=eq.${params[0]}&user_id=eq.${params[1]}`;
+      } else if (cleanSql.includes('id = ?')) {
+        queryParams = `id=eq.${params[0]}`;
+      } else if (cleanSql.includes('document_id = ?')) {
+        queryParams = `document_id=eq.${params[0]}`;
+      } else if (cleanSql.includes('debate_id = ?')) {
+        queryParams = `debate_id=eq.${params[0]}`;
+      }
+      return await querySupabaseRest('DELETE', `${table}?${queryParams}`);
+    }
+  }
+
+  return [];
+}
+
 export class DBConnection {
-  private db: sqlite3.Database;
+  private db: any = null;
+  private isServerless: boolean = false;
 
   constructor(dbPath: string) {
-    this.db = new sqlite3.Database(dbPath);
+    if (DatabaseClass) {
+      try {
+        this.db = new DatabaseClass(dbPath);
+      } catch (e) {
+        console.warn('Could not instantiate SQLite DB, switching to Serverless mode:', e);
+        this.isServerless = true;
+      }
+    } else {
+      this.isServerless = true;
+    }
   }
 
   run(sql: string, params: any[] = []): Promise<{ lastID: number; changes: number }> {
+    if (this.isServerless) {
+      const cleanSql = sql.trim().toLowerCase();
+      if (cleanSql.startsWith('create') || cleanSql.startsWith('alter')) {
+        return Promise.resolve({ lastID: 0, changes: 0 });
+      }
+      return translateSqlToRest(sql, params).then(() => ({ lastID: 0, changes: 1 }));
+    }
+
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function (err) {
+      this.db.run(sql, params, function (err: any) {
         if (err) reject(err);
         else resolve({ lastID: this.lastID, changes: this.changes });
       });
@@ -19,8 +170,12 @@ export class DBConnection {
   }
 
   all(sql: string, params: any[] = []): Promise<any[]> {
+    if (this.isServerless) {
+      return translateSqlToRest(sql, params);
+    }
+
     return new Promise((resolve, reject) => {
-      this.db.all(sql, params, (err, rows) => {
+      this.db.all(sql, params, (err: any, rows: any[]) => {
         if (err) reject(err);
         else resolve(rows);
       });
@@ -28,8 +183,12 @@ export class DBConnection {
   }
 
   get(sql: string, params: any[] = []): Promise<any> {
+    if (this.isServerless) {
+      return translateSqlToRest(sql, params).then(rows => (rows && rows.length > 0 ? rows[0] : null));
+    }
+
     return new Promise((resolve, reject) => {
-      this.db.get(sql, params, (err, row) => {
+      this.db.get(sql, params, (err: any, row: any) => {
         if (err) reject(err);
         else resolve(row);
       });
@@ -37,8 +196,11 @@ export class DBConnection {
   }
 
   close(): Promise<void> {
+    if (this.isServerless || !this.db) {
+      return Promise.resolve();
+    }
     return new Promise((resolve, reject) => {
-      this.db.close((err) => {
+      this.db.close((err: any) => {
         if (err) reject(err);
         else resolve();
       });
