@@ -33,7 +33,7 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
         maxTokens: 200,
       });
       this.totalCostUsd += intakeRes.costUsd;
-      const intake = intakeRes.parsed;
+      const intake = intakeRes.parsed || { classification: 'General Query', entities: [], time_horizon: 'short-term' };
       
       this.emit('status', { step: 'intake_done', data: intake });
       await db.run(
@@ -72,7 +72,7 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
             adv.id,
             adv.tag,
             this.question,
-            intake.classification,
+            intake.classification || 'General Query',
             phase1Traces[adv.id],
             this.userId
           );
@@ -136,7 +136,7 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
       const peerCards = await Promise.all(phase2Promises);
       
       // Update debate cost
-      const phase2Cost = peerCards.reduce((sum, c) => sum + c.trace.reduce((s, n) => s + (n.cost_usd || 0), 0), 0) - phase1Cost;
+      const phase2Cost = peerCards.reduce((sum, c) => sum + ((c.trace || []).reduce((s: number, n: any) => s + (n.cost_usd || 0), 0)), 0) - phase1Cost;
       this.totalCostUsd += phase2Cost;
       await db.run(`UPDATE debates SET cost_usd = ? WHERE id = ?`, [this.totalCostUsd, this.debateId]);
 
@@ -149,12 +149,12 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
           `${this.debateId}_${card.advisor_id}`,
           this.debateId,
           card.advisor_id,
-          card.verdict,
-          card.body_md,
-          JSON.stringify(card.claims),
-          JSON.stringify(card.assumptions),
-          card.confidence,
-          JSON.stringify(card.trace),
+          card.verdict || '',
+          card.body_md || '',
+          JSON.stringify(card.claims || []),
+          JSON.stringify(card.assumptions || []),
+          card.confidence || 'Partial',
+          JSON.stringify(card.trace || []),
           new Date().toISOString()
         ]);
       }

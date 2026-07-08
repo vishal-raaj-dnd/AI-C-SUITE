@@ -88,10 +88,10 @@ Produce a structured JSON response matching this schema:
 
   return {
     advisor_id: advisorId,
-    verdict: res.parsed.verdict,
-    summary: res.parsed.summary,
-    key_findings: res.parsed.key_findings,
-    assumptions: res.parsed.assumptions,
+    verdict: res.parsed?.verdict || 'Pending',
+    summary: res.parsed?.summary || '',
+    key_findings: res.parsed?.key_findings || [],
+    assumptions: res.parsed?.assumptions || [],
   };
 }
 
@@ -205,11 +205,11 @@ Generate a final Card Output in JSON:
 
   return {
     advisor_id: advisorId,
-    verdict: res.parsed.verdict,
-    body_md: res.parsed.body_md,
-    claims: res.parsed.claims,
-    assumptions: res.parsed.assumptions,
-    confidence: res.parsed.confidence,
+    verdict: res.parsed?.verdict || 'Pending',
+    body_md: res.parsed?.body_md || '',
+    claims: res.parsed?.claims || [],
+    assumptions: res.parsed?.assumptions || [],
+    confidence: res.parsed?.confidence || 'Partial',
     trace: traceCollector,
   };
 }
@@ -293,13 +293,13 @@ Generate a final Contrarian Card Output in JSON:
 
   return {
     advisor_id: 'contrarian',
-    verdict: res.parsed.verdict,
-    body_md: res.parsed.body_md,
-    claims: res.parsed.claims,
-    assumptions: res.parsed.assumptions,
-    confidence: res.parsed.confidence,
-    challenges: res.parsed.challenges,
-    the_unasked_question: res.parsed.the_unasked_question,
+    verdict: res.parsed?.verdict || 'Pending',
+    body_md: res.parsed?.body_md || '',
+    claims: res.parsed?.claims || [],
+    assumptions: res.parsed?.assumptions || [],
+    confidence: res.parsed?.confidence || 'Partial',
+    challenges: res.parsed?.challenges || [],
+    the_unasked_question: res.parsed?.the_unasked_question || '',
     trace: traceCollector,
   };
 }
