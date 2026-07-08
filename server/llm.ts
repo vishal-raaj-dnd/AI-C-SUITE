@@ -121,7 +121,12 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       if (opts.system) {
         messages.push({ role: 'system', content: opts.system });
       }
-      messages.push({ role: 'user', content: opts.prompt });
+      
+      let prompt = opts.prompt;
+      if (opts.schema && !prompt.toLowerCase().includes('json') && !(opts.system && opts.system.toLowerCase().includes('json'))) {
+        prompt += "\n\nResponse must be a valid JSON object.";
+      }
+      messages.push({ role: 'user', content: prompt });
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -185,7 +190,12 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       if (opts.system) {
         messages.push({ role: 'system', content: opts.system });
       }
-      messages.push({ role: 'user', content: opts.prompt });
+      
+      let prompt = opts.prompt;
+      if (opts.schema && !prompt.toLowerCase().includes('json') && !(opts.system && opts.system.toLowerCase().includes('json'))) {
+        prompt += "\n\nResponse must be a valid JSON object.";
+      }
+      messages.push({ role: 'user', content: prompt });
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
