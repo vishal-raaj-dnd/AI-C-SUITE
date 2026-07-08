@@ -92,7 +92,11 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
   const costUsd = 0;
 
   try {
-    if (geminiApiKey && geminiApiKey.trim().length > 0) {
+    const modelLower = modelName.toLowerCase();
+    const isGeminiModel = modelLower.includes('gemini') || modelLower.includes('google');
+    const isGroqModel = modelLower.includes('llama') || modelLower.includes('mixtral') || modelLower.includes('groq');
+
+    if (isGeminiModel && geminiApiKey && geminiApiKey.trim().length > 0) {
       // Direct Google Gemini SDK execution
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
       const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
@@ -108,9 +112,9 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
         }
       });
       text = response.text || '';
-    } else if (groqApiKey && groqApiKey.trim().length > 0) {
+    } else if (isGroqModel && groqApiKey && groqApiKey.trim().length > 0) {
       // Direct Groq API execution (OpenAI-compatible)
-      const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+      const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
       const messages = [];
       if (opts.system) {
         messages.push({ role: 'system', content: opts.system });
@@ -123,7 +127,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       };
 
       const body: any = {
-        model,
+        model: cleanModel || 'llama-3.3-70b-versatile',
         messages,
         temperature: 0.2
       };
@@ -157,8 +161,52 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       text = resJson.choices?.[0]?.message?.content || '';
       tokensIn = resJson.usage?.prompt_tokens || 0;
       tokensOut = resJson.usage?.completion_tokens || 0;
+    } else if (geminiApiKey && geminiApiKey.trim().length > 0) {
+      // Default fallback if key matches
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: opts.prompt,
+        config: {
+          systemInstruction: opts.system,
+          responseMimeType: opts.schema ? 'application/json' : 'text/plain',
+          maxOutputTokens: opts.maxTokens,
+          temperature: 0.2
+        }
+      });
+      text = response.text || '';
+    } else if (groqApiKey && groqApiKey.trim().length > 0) {
+      // Default fallback if key matches
+      const messages = [];
+      if (opts.system) {
+        messages.push({ role: 'system', content: opts.system });
+      }
+      messages.push({ role: 'user', content: opts.prompt });
+
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages,
+          temperature: 0.2,
+          max_tokens: opts.maxTokens,
+          response_format: opts.schema ? { type: 'json_object' } : undefined
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Groq API error: ${response.status} - ${errorText}`);
+      }
+
+      const resJson = await response.json();
+      text = resJson.choices?.[0]?.message?.content || '';
     } else {
-      // OpenRouter API execution
+      // OpenRouter API execution fallback
       if (!hasApiKey) {
         throw new Error('OPENROUTER_API_KEY is not configured in .env.');
       }
