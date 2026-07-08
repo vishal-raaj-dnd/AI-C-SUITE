@@ -98,21 +98,31 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
 
     if (isGeminiModel && geminiApiKey && geminiApiKey.trim().length > 0) {
       // Direct Google Gemini SDK execution
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-      const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
-      console.log(`[LLM] Direct Gemini SDK execution for model: ${cleanModel}`);
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
+        console.log(`[LLM] Direct Gemini SDK execution for model: ${cleanModel}`);
 
-      const response = await ai.models.generateContent({
-        model: cleanModel,
-        contents: opts.prompt,
-        config: {
-          systemInstruction: opts.system,
-          responseMimeType: opts.schema ? 'application/json' : 'text/plain',
-          maxOutputTokens: opts.maxTokens,
-          temperature: 0.2
+        const response = await ai.models.generateContent({
+          model: cleanModel,
+          contents: opts.prompt,
+          config: {
+            systemInstruction: opts.system,
+            responseMimeType: opts.schema ? 'application/json' : 'text/plain',
+            maxOutputTokens: opts.maxTokens,
+            temperature: 0.2
+          }
+        });
+        text = response.text || '';
+      } catch (error: any) {
+        if (error.status === 429 || (error.message && error.message.includes('429')) || (error.message && error.message.includes('RESOURCE_EXHAUSTED'))) {
+          const waitTime = 15;
+          console.warn(`[LLM] Gemini Rate limit hit (429). Retrying after ${waitTime}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+          return callLLM(opts);
         }
-      });
-      text = response.text || '';
+        throw error;
+      }
     } else if (isGroqModel && groqApiKey && groqApiKey.trim().length > 0) {
       // Direct Groq API execution (OpenAI-compatible)
       const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
@@ -161,6 +171,21 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 429 || errorText.includes('rate_limit_exceeded') || errorText.includes('429')) {
+          let retryAfterSeconds = 5;
+          try {
+            const errJson = JSON.parse(errorText);
+            const msg = errJson.error?.message || '';
+            const match = msg.match(/try again in ([\d.]+)\s*s/i);
+            if (match) {
+              retryAfterSeconds = Math.ceil(parseFloat(match[1])) + 1;
+            }
+          } catch (e) {}
+
+          console.warn(`[LLM] Groq Rate limit hit (429). Retrying after ${retryAfterSeconds}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000));
+          return callLLM(opts);
+        }
         throw new Error(`Groq API error: ${response.status} - ${errorText}`);
       }
 
@@ -171,18 +196,28 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
     } else if (geminiApiKey && geminiApiKey.trim().length > 0) {
       // Default fallback if key matches
       console.log("[LLM] Direct Gemini SDK execution fallback (gemini-2.5-flash)");
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: opts.prompt,
-        config: {
-          systemInstruction: opts.system,
-          responseMimeType: opts.schema ? 'application/json' : 'text/plain',
-          maxOutputTokens: opts.maxTokens,
-          temperature: 0.2
+      try {
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: opts.prompt,
+          config: {
+            systemInstruction: opts.system,
+            responseMimeType: opts.schema ? 'application/json' : 'text/plain',
+            maxOutputTokens: opts.maxTokens,
+            temperature: 0.2
+          }
+        });
+        text = response.text || '';
+      } catch (error: any) {
+        if (error.status === 429 || (error.message && error.message.includes('429')) || (error.message && error.message.includes('RESOURCE_EXHAUSTED'))) {
+          const waitTime = 15;
+          console.warn(`[LLM] Gemini Rate limit hit (429). Retrying after ${waitTime}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+          return callLLM(opts);
         }
-      });
-      text = response.text || '';
+        throw error;
+      }
     } else if (groqApiKey && groqApiKey.trim().length > 0) {
       // Default fallback if key matches
       console.log("[LLM] Direct Groq API execution fallback (llama-3.3-70b-versatile)");
@@ -214,6 +249,21 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (response.status === 429 || errorText.includes('rate_limit_exceeded') || errorText.includes('429')) {
+          let retryAfterSeconds = 5;
+          try {
+            const errJson = JSON.parse(errorText);
+            const msg = errJson.error?.message || '';
+            const match = msg.match(/try again in ([\d.]+)\s*s/i);
+            if (match) {
+              retryAfterSeconds = Math.ceil(parseFloat(match[1])) + 1;
+            }
+          } catch (e) {}
+
+          console.warn(`[LLM] Groq Rate limit hit (429). Retrying after ${retryAfterSeconds}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfterSeconds * 1000));
+          return callLLM(opts);
+        }
         throw new Error(`Groq API error: ${response.status} - ${errorText}`);
       }
 
