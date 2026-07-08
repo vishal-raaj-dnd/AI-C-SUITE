@@ -346,7 +346,8 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
         cleanText = cleanText.trim();
 
         const json = JSON.parse(cleanText);
-        parsed = opts.schema.parse(json);
+        const sanitized = sanitizeJsonForSchema(json, opts.schema);
+        parsed = opts.schema.parse(sanitized);
       } catch (err: any) {
         if (currentRetryCount < 2) {
           console.warn(`Validation failed, retrying with error logs... (Attempt ${currentRetryCount + 1}): ${err.message || err}`);
@@ -408,4 +409,60 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
     console.error(`LLM Call Failed for ${modelName}: ${error.message || error}`);
     throw error;
   }
+}
+
+function sanitizeJsonForSchema(json: any, schema: z.ZodType<any>): any {
+  if (!json || typeof json !== 'object') return json;
+
+  // 1. Sanitization for CardOutputSchema & ContrarianCardOutputSchema
+  if (json.claims && Array.isArray(json.claims)) {
+    json.claims = json.claims.map((claim: any) => {
+      if (claim && claim.evidence && typeof claim.evidence === 'object') {
+        const typeLower = String(claim.evidence.type || '').toLowerCase();
+        if (typeLower.includes('web') || typeLower.includes('search') || typeLower.includes('tool') || typeLower.includes('google')) {
+          claim.evidence.type = 'web';
+        } else if (typeLower.includes('chunk') || typeLower.includes('doc') || typeLower.includes('file') || typeLower.includes('context') || typeLower.includes('report')) {
+          claim.evidence.type = 'chunk';
+        } else if (typeLower.includes('dr') || typeLower.includes('decision')) {
+          claim.evidence.type = 'dr';
+        } else if (typeLower.includes('calc') || typeLower.includes('math') || typeLower.includes('margin')) {
+          claim.evidence.type = 'calculation';
+        } else {
+          claim.evidence.type = 'speculation';
+        }
+      }
+      return claim;
+    });
+  }
+
+  if (json.confidence && typeof json.confidence === 'string') {
+    const confLower = json.confidence.toLowerCase();
+    if (confLower.includes('ground')) {
+      json.confidence = 'Grounded';
+    } else if (confLower.includes('part')) {
+      json.confidence = 'Partial';
+    } else if (confLower.includes('spec')) {
+      json.confidence = 'Speculation';
+    } else {
+      json.confidence = 'Grounded';
+    }
+  }
+
+  if (json.verdict && typeof json.verdict === 'string') {
+    if (json.verdict.length > 160) {
+      json.verdict = json.verdict.substring(0, 157) + '...';
+    }
+  }
+
+  // 2. Sanitization for IntakeResultSchema
+  if (json.time_horizon === null || json.time_horizon === undefined) {
+    json.time_horizon = 'None';
+  } else if (typeof json.time_horizon === 'string') {
+    const horizonLower = json.time_horizon.toLowerCase();
+    if (horizonLower === 'none' || horizonLower === 'null') {
+      json.time_horizon = 'None';
+    }
+  }
+
+  return json;
 }
