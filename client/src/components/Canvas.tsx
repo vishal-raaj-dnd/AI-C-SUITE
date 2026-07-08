@@ -93,45 +93,11 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
 
   // Traces state
   const [traces, setTraces] = useState<TraceData[]>([
-    {
-      advisor_id: 'cmo',
-      steps: [
-        { step_name: 'ingest_context', input: { query: 'Should we launch a freemium tier?' }, output: { retrieved_chunks: ['marketing-strategy.md#chunk_2'] }, model: 'gemini-2.5-flash', latency_ms: 120, cost_usd: 0.00004 },
-        { step_name: 'initial_assessment', input: { context: 'Retrieved: Gating features is required...' }, output: { verdict: 'Launch Carefully' }, model: 'gemini-2.5-flash', latency_ms: 240, cost_usd: 0.00008 },
-        { step_name: 'coordinated_synthesis', input: { finance_stance: 'Positive Unit Economics' }, output: { recommendation: 'Integrate freemium gated logic' }, model: 'gemini-2.5-flash', latency_ms: 320, cost_usd: 0.00012 }
-      ]
-    },
-    {
-      advisor_id: 'cfo',
-      steps: [
-        { step_name: 'ingest_context', input: { query: 'Should we launch a freemium tier?' }, output: { retrieved_chunks: ['pl-spreadsheet.csv#chunk_0'] }, model: 'gemini-2.5-flash', latency_ms: 140, cost_usd: 0.00005 },
-        { step_name: 'initial_assessment', input: { context: 'Retrieved: Month, Revenue, server_cost...' }, output: { verdict: 'Positive Unit Economics' }, model: 'gemini-2.5-flash', latency_ms: 260, cost_usd: 0.00009 },
-        { step_name: 'coordinated_synthesis', input: { marketing_stance: 'Launch Carefully' }, output: { recommendation: 'Model CAC conversion rates' }, model: 'gemini-2.5-flash', latency_ms: 310, cost_usd: 0.00011 }
-      ]
-    },
-    {
-      advisor_id: 'cto',
-      steps: [
-        { step_name: 'ingest_context', input: { query: 'Should we launch a freemium tier?' }, output: { retrieved_chunks: ['product-roadmap.md#chunk_1'] }, model: 'gemini-2.5-flash', latency_ms: 110, cost_usd: 0.00003 },
-        { step_name: 'initial_assessment', input: { context: 'Retrieved: Gating requires refactoring...' }, output: { verdict: 'Technically Feasible' }, model: 'gemini-2.5-flash', latency_ms: 230, cost_usd: 0.00007 },
-        { step_name: 'coordinated_synthesis', input: { ops_stance: 'Operationally Manageable' }, output: { recommendation: 'Estimate engineering efforts (3-4 weeks)' }, model: 'gemini-2.5-flash', latency_ms: 290, cost_usd: 0.00010 }
-      ]
-    },
-    {
-      advisor_id: 'coo',
-      steps: [
-        { step_name: 'ingest_context', input: { query: 'Should we launch a freemium tier?' }, output: { retrieved_chunks: ['team-ops.md#chunk_2'] }, model: 'gemini-2.5-flash', latency_ms: 150, cost_usd: 0.00005 },
-        { step_name: 'initial_assessment', input: { context: 'Retrieved: Support tickets redirect to Discord...' }, output: { verdict: 'Operationally Manageable' }, model: 'gemini-2.5-flash', latency_ms: 280, cost_usd: 0.00009 },
-        { step_name: 'coordinated_synthesis', input: { tech_stance: 'Technically Feasible' }, output: { recommendation: 'Redirect non-Pro users to community support' }, model: 'gemini-2.5-flash', latency_ms: 330, cost_usd: 0.00013 }
-      ]
-    },
-    {
-      advisor_id: 'contrarian',
-      steps: [
-        { step_name: 'extract_consensus', input: { stances: ['CMO: Launch Carefully', 'CFO: Positive Unit Economics', 'CTO: Technically Feasible', 'COO: Operationally Manageable'] }, output: { consensus: 'General optimism regarding freemium viability' }, model: 'gemini-2.5-flash', latency_ms: 180, cost_usd: 0.00006 },
-        { step_name: 'steelman_counter_case', input: { consensus: 'optimism' }, output: { verdict: 'High Risk of Cannibalization' }, model: 'gemini-2.5-flash', latency_ms: 290, cost_usd: 0.00010 }
-      ]
-    }
+    { advisor_id: 'cmo', steps: [] },
+    { advisor_id: 'cfo', steps: [] },
+    { advisor_id: 'cto', steps: [] },
+    { advisor_id: 'coo', steps: [] },
+    { advisor_id: 'contrarian', steps: [] }
   ]);
 
   // Decision Record synthesis state
@@ -407,7 +373,52 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
       const id = data.debate_id;
       setDebateId(id);
 
-      // Listen to SSE Stream
+      // Vercel async mode: poll for results instead of SSE
+      if (data.mode === 'async') {
+        setStatusMessage('Debate is processing on the server...');
+        const pollInterval = setInterval(async () => {
+          try {
+            const pollRes = await fetch(`/api/debates/${id}`);
+            if (pollRes.ok) {
+              const pollData = await pollRes.json();
+              if (pollData.status === 'complete' && pollData.cards && pollData.cards.length > 0) {
+                clearInterval(pollInterval);
+                const loadedCards: Record<string, CardState> = {};
+                for (const c of pollData.cards) {
+                  loadedCards[c.advisor_id] = {
+                    advisor_id: c.advisor_id,
+                    verdict: c.verdict,
+                    body_md: c.body_md,
+                    claims: c.claims,
+                    assumptions: c.assumptions,
+                    confidence: c.confidence,
+                    status: 'complete',
+                    statusText: 'Analysis compiled'
+                  };
+                }
+                setCards(loadedCards);
+                const loadedTraces = pollData.cards.map((c: any) => ({
+                  advisor_id: c.advisor_id,
+                  steps: c.trace || []
+                }));
+                setTraces(loadedTraces);
+                setCostMeter(pollData.cost_usd || 0);
+                setIsAnalyzing(false);
+                setStatusMessage('Debate complete!');
+              } else if (pollData.status === 'failed') {
+                clearInterval(pollInterval);
+                setIsAnalyzing(false);
+                setStatusMessage('Debate failed on the server.');
+              }
+            }
+          } catch (pollErr) {
+            console.error('Polling error:', pollErr);
+          }
+        }, 3000);
+        return;
+      }
+
+      // Local mode: Listen to SSE Stream
       const eventSource = new EventSource(`/api/debates/${id}/stream?userId=${userId}`);
       
       eventSource.onmessage = (event) => {
@@ -418,11 +429,17 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
           return;
         }
 
-        const data = JSON.parse(event.data);
+        let data: any;
+        try {
+          data = JSON.parse(event.data);
+        } catch (parseErr) {
+          console.warn('SSE received non-JSON data:', event.data);
+          return; // Skip non-JSON messages safely
+        }
         const { step, message, brief, card, cards: allCards, traces: allTraces, total_cost } = data;
 
         if (total_cost) {
-          setCostMeter(parseFloat((12.48 + total_cost).toFixed(2))); // cumulative with baseline cost
+          setCostMeter(parseFloat((total_cost).toFixed(2)));
         }
 
         if (message) {
@@ -449,7 +466,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
           const adv = step.split('_')[1];
           setCards(prev => ({
             ...prev,
-            [adv]: { ...prev[adv], status: 'running', statusText: `Sharing initial stance: "${brief.verdict}"` }
+            [adv]: { ...prev[adv], status: 'running', statusText: `Sharing initial stance: "${brief?.verdict || '...'}"` }
           }));
         } else if (step === 'phase2_start') {
           setCards(prev => {
@@ -513,10 +530,48 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
         }
       };
 
+      // On SSE disconnect (tab switch, network blip), try to recover state from DB
       eventSource.onerror = (e) => {
-        console.error('SSE Error:', e);
-        setIsAnalyzing(false);
+        console.warn('SSE connection interrupted. Attempting to recover debate state from server...');
         eventSource.close();
+        // Poll the debate endpoint to recover completed cards instead of losing state
+        const pollRecovery = async () => {
+          try {
+            const recoverRes = await fetch(`/api/debates/${id}`);
+            if (recoverRes.ok) {
+              const recoverData = await recoverRes.json();
+              if (recoverData.status === 'complete' && recoverData.cards && recoverData.cards.length > 0) {
+                const loadedCards: Record<string, CardState> = {};
+                for (const c of recoverData.cards) {
+                  loadedCards[c.advisor_id] = {
+                    advisor_id: c.advisor_id,
+                    verdict: c.verdict,
+                    body_md: c.body_md,
+                    claims: c.claims,
+                    assumptions: c.assumptions,
+                    confidence: c.confidence,
+                    status: 'complete',
+                    statusText: 'Recovered'
+                  };
+                }
+                setCards(loadedCards);
+                const loadedTraces = recoverData.cards.map((c: any) => ({
+                  advisor_id: c.advisor_id,
+                  steps: c.trace || []
+                }));
+                setTraces(loadedTraces);
+                setStatusMessage('Debate recovered from server.');
+              } else if (recoverData.status === 'running') {
+                setStatusMessage('Debate still processing on server. Please wait and refresh.');
+              }
+            }
+          } catch (recoverErr) {
+            console.error('Recovery failed:', recoverErr);
+          }
+          setIsAnalyzing(false);
+        };
+        // Delay recovery poll slightly to let backend finish writing
+        setTimeout(pollRecovery, 2000);
       };
 
     } catch (err: any) {

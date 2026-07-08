@@ -3,6 +3,8 @@ import { runPhase1, runPhase2, runContrarian, InitialBrief, AdvisorCardOutput } 
 import { db } from './db';
 import EventEmitter from 'events';
 
+const activeModel = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
+
 export class DebateOrchestrator extends EventEmitter {
   private debateId: string;
   private question: string;
@@ -44,7 +46,7 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
         step_name: 'shared_intake',
         input: { question: this.question },
         output: intake,
-        model: 'gemini-2.5-flash',
+        model: activeModel,
         tokens_in: intakeRes.tokensIn,
         tokens_out: intakeRes.tokensOut,
         cost_usd: intakeRes.costUsd,

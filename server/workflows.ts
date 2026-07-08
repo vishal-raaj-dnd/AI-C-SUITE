@@ -2,6 +2,8 @@ import { callLLM, InitialBriefSchema, CardOutputSchema, ContrarianCardOutputSche
 import { retrieveKb } from './db';
 import { webSearch, tableQuery, drLookup } from './tools';
 
+const activeModel = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
+
 export type InitialBrief = {
   advisor_id: string;
   verdict: string;
@@ -77,7 +79,7 @@ Produce a structured JSON response matching this schema:
     step_name: 'phase_1_investigation',
     input: { question, scopeTag },
     output: res.parsed,
-    model: 'gemini-2.5-flash',
+    model: activeModel,
     tokens_in: res.tokensIn,
     tokens_out: res.tokensOut,
     cost_usd: res.costUsd,
@@ -193,7 +195,7 @@ Generate a final Card Output in JSON:
     step_name: 'phase_2_coordinated_synthesis',
     input: { question, toolCalls: toolCallsUsed },
     output: res.parsed,
-    model: 'gemini-2.5-pro',
+    model: activeModel,
     tokens_in: res.tokensIn,
     tokens_out: res.tokensOut,
     cost_usd: res.costUsd,
@@ -282,7 +284,7 @@ Generate a final Contrarian Card Output in JSON:
     step_name: 'phase_3_contrarian_critique',
     input: { question },
     output: res.parsed,
-    model: 'gemini-2.5-pro',
+    model: activeModel,
     tokens_in: res.tokensIn,
     tokens_out: res.tokensOut,
     cost_usd: res.costUsd,

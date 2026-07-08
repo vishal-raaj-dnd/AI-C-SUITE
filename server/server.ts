@@ -165,7 +165,16 @@ app.post('/api/debates', async (req, res) => {
       created_at: new Date().toISOString()
     });
 
-    res.json({ debate_id: debateId });
+    // On Vercel, fire-and-forget the debate immediately since SSE won't work
+    if (process.env.VERCEL) {
+      const orchestrator = new DebateOrchestrator(debateId, question, userId);
+      orchestrator.run().catch(err => {
+        console.error('Background debate failed:', err.message || err);
+      });
+      res.json({ debate_id: debateId, mode: 'async' });
+    } else {
+      res.json({ debate_id: debateId, mode: 'stream' });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message || err });
   }
@@ -200,37 +209,56 @@ app.get('/api/debates/:id', async (req, res) => {
   }
 });
 
-// SSE Streaming debate progress
+// SSE Streaming debate progress (local) or async fire-and-forget (Vercel)
 app.get('/api/debates/:id/stream', async (req, res) => {
   const { id } = req.params;
   const userId = (req.query.userId as string) || (req.headers['x-user-id'] as string) || 'default_user';
 
+  const debate = await db.get(`SELECT * FROM debates WHERE id = ?`, [id]);
+  if (!debate) {
+    return res.status(404).json({ error: 'Debate not found' });
+  }
+
+  // On Vercel: run debate asynchronously and return immediately
+  if (process.env.VERCEL) {
+    const orchestrator = new DebateOrchestrator(id, debate.question, userId);
+    // Fire and forget - the debate will run and save results to DB
+    orchestrator.run().catch(err => {
+      console.error('Background debate failed:', err.message || err);
+    });
+    return res.json({ mode: 'async', message: 'Debate started. Poll /api/debates/:id for results.' });
+  }
+
+  // Local: use SSE streaming
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const debate = await db.get(`SELECT * FROM debates WHERE id = ?`, [id]);
-  if (!debate) {
-    res.write(`data: ${JSON.stringify({ step: 'error', error: 'Debate not found' })}\n\n`);
-    res.end();
-    return;
-  }
-
+  let connectionOpen = true;
   const orchestrator = new DebateOrchestrator(id, debate.question, userId);
 
   orchestrator.on('status', (event) => {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
+    if (connectionOpen) {
+      try {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      } catch (writeErr) {
+        connectionOpen = false;
+      }
+    }
   });
 
   req.on('close', () => {
+    connectionOpen = false;
     console.log(`Connection closed for stream: ${id}`);
     orchestrator.removeAllListeners();
   });
 
   await orchestrator.run();
-  res.write('data: [DONE]\n\n');
-  res.end();
+  if (connectionOpen) {
+    res.write('data: [DONE]\n\n');
+    res.end();
+  }
 });
 
 // Multi-turn Cross-Chat debate between 2 C-level advisors
