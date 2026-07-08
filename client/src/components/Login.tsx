@@ -27,7 +27,13 @@ export function Login({ onLoginSuccess }: LoginProps) {
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (parseErr) {
+        throw new Error('Server returned an invalid response. Please check that the backend is running and Supabase tables are created.');
+      }
+      
       if (!response.ok) {
         throw new Error(data.error || 'Authentication failed');
       }

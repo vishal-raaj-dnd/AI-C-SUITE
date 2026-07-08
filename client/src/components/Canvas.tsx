@@ -63,17 +63,23 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
   const [question, setQuestion] = useState(initialQuestion);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
-  const [costMeter, setCostMeter] = useState(12.48); // Baseline cost from mockup
+  const [costMeter, setCostMeter] = useState(0);
   const [debateId, setDebateId] = useState<string | null>(null);
 
-  // Cards state
-  const [cards, setCards] = useState<Record<string, CardState>>({
-    cmo: { advisor_id: 'cmo', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-    cfo: { advisor_id: 'cfo', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-    cto: { advisor_id: 'cto', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-    coo: { advisor_id: 'coo', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-    contrarian: { advisor_id: 'contrarian', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
+  const emptyCard = (id: string): CardState => ({
+    advisor_id: id, verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle'
   });
+
+  const defaultCards = (): Record<string, CardState> => ({
+    cmo: emptyCard('cmo'),
+    cfo: emptyCard('cfo'),
+    cto: emptyCard('cto'),
+    coo: emptyCard('coo'),
+    contrarian: emptyCard('contrarian'),
+  });
+
+  // Cards state
+  const [cards, setCards] = useState<Record<string, CardState>>(defaultCards());
 
   // Selected cards for cross-chat
   const [selectedCards, setSelectedCards] = useState<string[]>([]);
@@ -119,21 +125,18 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
         if (response.ok) {
           const data = await response.json();
           if (data.cards && data.cards.length > 0) {
-            const loadedCards: Record<string, CardState> = {};
+            const loadedCards: Record<string, CardState> = { ...defaultCards() };
             for (const c of data.cards) {
               loadedCards[c.advisor_id] = {
                 advisor_id: c.advisor_id,
-                verdict: c.verdict,
-                body_md: c.body_md,
-                claims: c.claims,
-                assumptions: c.assumptions,
-                confidence: c.confidence,
+                verdict: c.verdict || '',
+                body_md: c.body_md || '',
+                claims: c.claims || [],
+                assumptions: c.assumptions || [],
+                confidence: c.confidence || 'Grounded',
                 status: 'complete',
-                statusText: 'Analysis compiled'
+                statusText: c.advisor_id === 'contrarian' ? 'Critique compiled' : 'Analysis compiled'
               };
-            }
-            if (loadedCards.contrarian) {
-              loadedCards.contrarian.statusText = 'Critique compiled';
             }
             setCards(loadedCards);
             setDebateId(data.id);
@@ -172,7 +175,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
 
       // Fallback if not run yet
       setDebateId(null);
-      setCostMeter(12.48);
+      setCostMeter(0);
 
       if (canvasId === 'can_1') {
         setCards({
@@ -239,13 +242,7 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
         });
       } else {
         // Clear all info for new canvases
-        setCards({
-          cmo: { advisor_id: 'cmo', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-          cfo: { advisor_id: 'cfo', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-          cto: { advisor_id: 'cto', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-          coo: { advisor_id: 'coo', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-          contrarian: { advisor_id: 'contrarian', verdict: '', body_md: '', claims: [], assumptions: [], confidence: 'Grounded', status: 'idle', statusText: 'Idle' },
-        });
+        setCards(defaultCards());
       }
     };
 
@@ -383,15 +380,15 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
               const pollData = await pollRes.json();
               if (pollData.status === 'complete' && pollData.cards && pollData.cards.length > 0) {
                 clearInterval(pollInterval);
-                const loadedCards: Record<string, CardState> = {};
+                const loadedCards: Record<string, CardState> = { ...defaultCards() };
                 for (const c of pollData.cards) {
                   loadedCards[c.advisor_id] = {
                     advisor_id: c.advisor_id,
-                    verdict: c.verdict,
-                    body_md: c.body_md,
-                    claims: c.claims,
-                    assumptions: c.assumptions,
-                    confidence: c.confidence,
+                    verdict: c.verdict || '',
+                    body_md: c.body_md || '',
+                    claims: c.claims || [],
+                    assumptions: c.assumptions || [],
+                    confidence: c.confidence || 'Grounded',
                     status: 'complete',
                     statusText: 'Analysis compiled'
                   };
@@ -541,15 +538,15 @@ export function Canvas({ canvasId, initialQuestion, userId }: { canvasId: string
             if (recoverRes.ok) {
               const recoverData = await recoverRes.json();
               if (recoverData.status === 'complete' && recoverData.cards && recoverData.cards.length > 0) {
-                const loadedCards: Record<string, CardState> = {};
+                const loadedCards: Record<string, CardState> = { ...defaultCards() };
                 for (const c of recoverData.cards) {
                   loadedCards[c.advisor_id] = {
                     advisor_id: c.advisor_id,
-                    verdict: c.verdict,
-                    body_md: c.body_md,
-                    claims: c.claims,
-                    assumptions: c.assumptions,
-                    confidence: c.confidence,
+                    verdict: c.verdict || '',
+                    body_md: c.body_md || '',
+                    claims: c.claims || [],
+                    assumptions: c.assumptions || [],
+                    confidence: c.confidence || 'Grounded',
                     status: 'complete',
                     statusText: 'Recovered'
                   };

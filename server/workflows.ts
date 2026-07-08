@@ -276,7 +276,7 @@ Generate a final Contrarian Card Output in JSON:
     system,
     prompt,
     schema: ContrarianCardOutputSchema,
-    maxTokens: 800,
+    maxTokens: 1200,
   });
 
   const latencyMs = Date.now() - startTime;
