@@ -54,6 +54,22 @@ async function translateSqlToRest(sql: string, params: any[]): Promise<any> {
   // 2. SELECT WHERE
   if (cleanSql.startsWith('select')) {
     const table = cleanSql.match(/from\s+(\w+)/)?.[1];
+    
+    if (cleanSql.includes('select chunks.id, chunks.text, chunks.scope_tag')) {
+      const scopes = params.slice(0, params.length - 1);
+      const uId = params[params.length - 1];
+      const scopesCsv = scopes.map(s => encodeURIComponent(s)).join(',');
+      
+      const path = `chunks?select=id,text,scope_tag,documents!inner(user_id)&scope_tag=in.(${scopesCsv})&or=(documents.user_id.eq.${uId},documents.user_id.eq.default_user,documents.user_id.eq.can_seed,documents.user_id.is.null)`;
+      
+      const results = await querySupabaseRest('GET', path);
+      return results.map((r: any) => ({
+        id: r.id,
+        text: r.text,
+        scope_tag: r.scope_tag
+      }));
+    }
+
     let queryParams = '';
     
     if (cleanSql.includes('email = ? and password = ?')) {
@@ -416,6 +432,16 @@ export async function indexDocument(file: string, content: string, scope: string
 
 // Simple keyword search helper to retrieve relevant chunks by query and tags
 export async function retrieveKb(query: string, scopeTags: string[], userId?: string): Promise<{ id: string; text: string; scope: string }[]> {
+  try {
+    const docCount = await db.get(`SELECT COUNT(*) as count FROM documents`);
+    if (!docCount || docCount.count === 0) {
+      console.log('Database documents table is empty. Seeding initial fixtures on the fly...');
+      await seedFixtures();
+    }
+  } catch (seedErr: any) {
+    console.warn('Seeding check failed, continuing anyway:', seedErr.message || seedErr);
+  }
+
   const queryTerms = query
     .toLowerCase()
     .replace(/[^\w\s]/g, ' ')
