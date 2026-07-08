@@ -154,7 +154,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
         const json = JSON.parse(cleanText);
         parsed = opts.schema.parse(json);
       } catch (err: any) {
-        console.warn(`Validation failed, retrying with error logs...`, err);
+        console.warn(`Validation failed, retrying with error logs... ${err.message || err}`);
         const repairPrompt = `${opts.prompt}\n\nYour previous output failed validation: ${err.message || err}. Please repair it and produce a JSON response adhering EXACTLY to the schema.`;
         return await callLLM({
           ...opts,
@@ -171,8 +171,8 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       costUsd,
       latencyMs,
     };
-  } catch (error) {
-    console.error(`LLM Call Failed for ${modelName}:`, error);
+  } catch (error: any) {
+    console.error(`LLM Call Failed for ${modelName}: ${error.message || error}`);
     throw error;
   }
 }

@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+
 let DatabaseClass: any = null;
 try {
   // Only load native sqlite3 bindings when not running in Vercel/serverless environments

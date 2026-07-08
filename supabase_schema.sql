@@ -69,7 +69,19 @@ CREATE TABLE IF NOT EXISTS documents (
 ALTER TABLE documents FORCE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all public read/write" ON documents FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 6. Create Decision Records Table
+-- 6. Create Chunks Table
+CREATE TABLE IF NOT EXISTS chunks (
+  id TEXT PRIMARY KEY,
+  document_id TEXT,
+  scope_tag TEXT,
+  text TEXT,
+  chunk_index INTEGER
+);
+
+ALTER TABLE chunks FORCE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all public read/write" ON chunks FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- 7. Create Decision Records Table
 CREATE TABLE IF NOT EXISTS decision_records (
   id TEXT PRIMARY KEY,
   user_id TEXT,
