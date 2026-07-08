@@ -100,6 +100,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       // Direct Google Gemini SDK execution
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
       const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
+      console.log(`[LLM] Direct Gemini SDK execution for model: ${cleanModel}`);
 
       const response = await ai.models.generateContent({
         model: cleanModel,
@@ -115,6 +116,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
     } else if (isGroqModel && groqApiKey && groqApiKey.trim().length > 0) {
       // Direct Groq API execution (OpenAI-compatible)
       const cleanModel = modelName.includes('/') ? modelName.split('/').pop()! : modelName;
+      console.log(`[LLM] Direct Groq API execution for model: ${cleanModel}`);
       const messages = [];
       if (opts.system) {
         messages.push({ role: 'system', content: opts.system });
@@ -163,6 +165,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       tokensOut = resJson.usage?.completion_tokens || 0;
     } else if (geminiApiKey && geminiApiKey.trim().length > 0) {
       // Default fallback if key matches
+      console.log("[LLM] Direct Gemini SDK execution fallback (gemini-2.5-flash)");
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -177,6 +180,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       text = response.text || '';
     } else if (groqApiKey && groqApiKey.trim().length > 0) {
       // Default fallback if key matches
+      console.log("[LLM] Direct Groq API execution fallback (llama-3.3-70b-versatile)");
       const messages = [];
       if (opts.system) {
         messages.push({ role: 'system', content: opts.system });
@@ -210,6 +214,7 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       if (!hasApiKey) {
         throw new Error('OPENROUTER_API_KEY is not configured in .env.');
       }
+      console.log(`[LLM] OpenRouter API execution fallback for model: ${modelName}`);
       const messages = [];
       if (opts.system) {
         messages.push({ role: 'system', content: opts.system });
