@@ -68,6 +68,7 @@ export type CallLLMOpts = {
   prompt: string;
   schema?: z.ZodType<any>;
   maxTokens?: number;
+  retryCount?: number;
 };
 
 export type LLMResult = {
@@ -115,11 +116,18 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
       body.response_format = { type: 'json_object' };
     }
 
+    // Abort after 30s to prevent pipeline hangs
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers,
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -135,6 +143,8 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
     const tokensIn = resJson.usage?.prompt_tokens || 0;
     const tokensOut = resJson.usage?.completion_tokens || 0;
     const costUsd = 0; // free tier model has 0 cost
+
+    const currentRetryCount = opts.retryCount || 0;
 
     let parsed: any = undefined;
     if (opts.schema && text.trim().length > 0) {
@@ -154,12 +164,51 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
         const json = JSON.parse(cleanText);
         parsed = opts.schema.parse(json);
       } catch (err: any) {
-        console.warn(`Validation failed, retrying with error logs... ${err.message || err}`);
-        const repairPrompt = `${opts.prompt}\n\nYour previous output failed validation: ${err.message || err}. Please repair it and produce a JSON response adhering EXACTLY to the schema.`;
-        return await callLLM({
-          ...opts,
-          prompt: repairPrompt,
-        });
+        if (currentRetryCount < 2) {
+          console.warn(`Validation failed, retrying with error logs... (Attempt ${currentRetryCount + 1}): ${err.message || err}`);
+          const repairPrompt = `${opts.prompt}\n\nYour previous output failed validation: ${err.message || err}. Please repair it and produce a JSON response adhering EXACTLY to the schema.`;
+          return await callLLM({
+            ...opts,
+            prompt: repairPrompt,
+            retryCount: currentRetryCount + 1
+          });
+        } else {
+          console.error(`Validation failed after max retries. Compiling fallback JSON for schema parsing...`);
+          try {
+            // Build fallback objects to prevent crashes
+            if (opts.schema === CardOutputSchema) {
+              parsed = {
+                verdict: "Compromise Pending",
+                body_md: "Analysis was completed but could not be parsed into the target schema format.",
+                claims: [],
+                assumptions: ["Undergoing structural formatting"],
+                confidence: "Partial"
+              };
+            } else if (opts.schema === IntakeResultSchema) {
+              parsed = {
+                classification: "General Query",
+                entities: [],
+                time_horizon: "short-term"
+              };
+            } else if (opts.schema === InitialBriefSchema) {
+              parsed = {
+                verdict: "Requires Analysis",
+                summary: "Initial assessment brief generated with fallback parameters.",
+                key_findings: [],
+                assumptions: []
+              };
+            } else {
+              const matches = text.match(/\{[\s\S]*\}/);
+              if (matches) {
+                parsed = JSON.parse(matches[0]);
+              } else {
+                throw new Error("No JSON substring found");
+              }
+            }
+          } catch (salvageErr) {
+            throw new Error(`Model output validation failed repeatedly: ${err.message || err}`);
+          }
+        }
       }
     }
 

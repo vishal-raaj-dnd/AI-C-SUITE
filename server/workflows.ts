@@ -69,6 +69,7 @@ Produce a structured JSON response matching this schema:
     system,
     prompt,
     schema: InitialBriefSchema,
+    maxTokens: 400,
   });
 
   const latencyMs = Date.now() - startTime;
@@ -180,10 +181,11 @@ Generate a final Card Output in JSON:
 }`;
 
   const res = await callLLM({
-    model: 'main', // High reasoning model for Phase 2 Coordinated Synthesis
+    model: 'main',
     system,
     prompt,
     schema: CardOutputSchema,
+    maxTokens: 800,
   });
 
   const latencyMs = Date.now() - startTime;
@@ -272,6 +274,7 @@ Generate a final Contrarian Card Output in JSON:
     system,
     prompt,
     schema: ContrarianCardOutputSchema,
+    maxTokens: 800,
   });
 
   const latencyMs = Date.now() - startTime;

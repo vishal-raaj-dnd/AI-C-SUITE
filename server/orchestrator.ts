@@ -28,6 +28,7 @@ export class DebateOrchestrator extends EventEmitter {
 Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), any key entities (company names, tools, concepts), and the time horizon if mentioned.`,
         prompt: `Parse this question: "${this.question}"`,
         schema: IntakeResultSchema,
+        maxTokens: 200,
       });
       this.totalCostUsd += intakeRes.costUsd;
       const intake = intakeRes.parsed;
