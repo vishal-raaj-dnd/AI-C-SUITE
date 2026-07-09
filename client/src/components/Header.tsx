@@ -46,28 +46,18 @@ export function Header({ onMenuClick, userEmail, onLogout }: HeaderProps) {
           <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
         </button>
 
-        {/* Profile Dropdown containing only Logout option */}
+        {/* Profile Dropdown containing user info */}
         {dropdownOpen && (
           <>
             <div 
               className="fixed inset-0 z-10" 
               onClick={() => setDropdownOpen(false)}
             />
-            <div className="absolute right-0 top-11 w-48 bg-white border border-gray-200 rounded-xl shadow-xl py-1 z-20 animate-scale-in">
-              <div className="px-4 py-2 border-b border-gray-100 text-left">
+            <div className="absolute right-0 top-11 w-48 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 z-20 animate-scale-in">
+              <div className="px-4 py-2 text-left font-semibold">
                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Signed in as</p>
-                <p className="text-xs text-gray-700 truncate font-medium mt-0.5">{userEmail || 'Account'}</p>
+                <p className="text-xs text-gray-700 truncate mt-0.5">{userEmail || 'Account'}</p>
               </div>
-              <button
-                onClick={() => {
-                  setDropdownOpen(false);
-                  if (onLogout) onLogout();
-                }}
-                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 text-left font-semibold transition-colors"
-              >
-                <LogOut className="w-4 h-4 text-red-500" />
-                Logout Account
-              </button>
             </div>
           </>
         )}

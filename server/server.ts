@@ -558,7 +558,7 @@ app.delete('/api/kb/documents/:id', async (req, res) => {
   const userId = (req.headers['x-user-id'] as string) || 'default_user';
   const { id } = req.params;
   try {
-    const doc = await db.get(`SELECT filename, scope_tag FROM documents WHERE id = ? AND user_id = ?`, [id, userId]);
+    const doc = await db.get(`SELECT filename, scope_tag FROM documents WHERE id = ? AND (user_id = ? OR user_id = 'default_user' OR user_id = 'can_seed' OR user_id IS NULL)`, [id, userId]);
     if (doc) {
       const filePath = path.join(process.cwd(), 'fixtures', doc.scope_tag, doc.filename);
       if (fs.existsSync(filePath)) {
@@ -579,7 +579,7 @@ app.delete('/api/kb/documents/:id', async (req, res) => {
 app.get('/api/canvases', async (req, res) => {
   const userId = (req.headers['x-user-id'] as string) || 'default_user';
   try {
-    const rows = await db.all(`SELECT * FROM canvases WHERE user_id = ? ORDER BY created_at DESC`, [userId]);
+    const rows = await db.all(`SELECT * FROM canvases WHERE user_id = ? OR user_id IS NULL OR user_id = 'default_user' ORDER BY created_at DESC`, [userId]);
     res.json(rows);
   } catch (err: any) {
     res.status(500).json({ error: err.message || err });
@@ -617,7 +617,7 @@ app.delete('/api/canvases/:id', async (req, res) => {
   const userId = (req.headers['x-user-id'] as string) || 'default_user';
   const { id } = req.params;
   try {
-    await db.run(`DELETE FROM canvases WHERE id = ? AND user_id = ?`, [id, userId]);
+    await db.run(`DELETE FROM canvases WHERE id = ? AND (user_id = ? OR user_id IS NULL OR user_id = 'default_user')`, [id, userId]);
     res.json({ success: true, message: 'Canvas deleted successfully' });
   } catch (err: any) {
     res.status(500).json({ error: err.message || err });

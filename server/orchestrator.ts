@@ -3,7 +3,7 @@ import { runPhase1, runPhase2, runContrarian, InitialBrief, AdvisorCardOutput } 
 import { db } from './db.js';
 import EventEmitter from 'events';
 
-const activeModel = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
+const activeModel = process.env.GROQ_MODEL || process.env.OPENROUTER_MODEL || 'llama-3.1-8b-instant';
 
 export class DebateOrchestrator extends EventEmitter {
   private debateId: string;
@@ -83,8 +83,9 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
 
       const phase1Traces: Record<string, any[]> = { cmo: [intakeTrace], cfo: [intakeTrace], cto: [intakeTrace], coo: [intakeTrace] };
       
-      const phase1Promises = parallelAdvisors.map(async (adv) => {
+      const phase1Promises = parallelAdvisors.map(async (adv, index) => {
         try {
+          await new Promise(resolve => setTimeout(resolve, index * 1500));
           this.emit('status', { step: `phase1_${adv.id}_running`, message: `Chief ${adv.id.toUpperCase()} Officer reading KB files...` });
           const brief = await runPhase1(
             adv.id,
@@ -120,8 +121,9 @@ Extract the classification (e.g. Freemium Strategy, Pricing Strategy, Hiring), a
       // 3. Run Phase 2 Coordinated Synthesis (CMO, CFO, CTO, COO in parallel)
       this.emit('status', { step: 'phase2_start', message: 'Advisors coordinating perspectives and executing tools...' });
 
-      const phase2Promises = parallelAdvisors.map(async (adv) => {
+      const phase2Promises = parallelAdvisors.map(async (adv, index) => {
         try {
+          await new Promise(resolve => setTimeout(resolve, index * 1500));
           // CFO runs calculator tool, others run web search or local review
           const actionText = adv.id === 'cfo' ? 'calculating margins' : adv.id === 'coo' ? 'mapping ops dependencies' : 'searching web';
           this.emit('status', { step: `phase2_${adv.id}_running`, message: `Chief ${adv.id.toUpperCase()} Officer ${actionText}...` });

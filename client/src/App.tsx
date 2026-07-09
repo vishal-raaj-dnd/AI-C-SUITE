@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Canvas } from './components/Canvas';
 import { KnowledgeBase } from './components/KnowledgeBase';
 import { DecisionRecords } from './components/DecisionRecords';
-import { Login } from './components/Login';
+
 import { API_BASE } from './utils/api';
 
 type CanvasData = {
@@ -24,9 +24,9 @@ export default function App() {
   const [activeCanvasQuestion, setActiveCanvasQuestion] = useState<string>('Should we launch a freemium tier?');
 
   // SaaS User Session Auth state
-  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('q_user_id'));
-  const [userId, setUserId] = useState(localStorage.getItem('q_user_id') || '');
-  const [userEmail, setUserEmail] = useState(localStorage.getItem('q_user_email') || '');
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [userId, setUserId] = useState('default_user');
+  const [userEmail, setUserEmail] = useState('demo@quorum.ai');
 
   const fetchCanvases = async () => {
     try {
@@ -124,30 +124,13 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (uid: string, email: string) => {
-    setUserId(uid);
-    setUserEmail(email);
-    setIsLoggedIn(true);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('q_user_id');
-    localStorage.removeItem('q_user_email');
-    setUserId('');
-    setUserEmail('');
-    setIsLoggedIn(false);
-  };
-
-  if (!isLoggedIn) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
-  }
+  // Authentication handlers removed for direct access
 
   return (
     <div className="flex flex-col h-screen font-sans bg-gray-50 text-gray-900 selection:bg-blue-100">
       <Header 
         onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
         userEmail={userEmail}
-        onLogout={handleLogout}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 

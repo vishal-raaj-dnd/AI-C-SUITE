@@ -385,8 +385,8 @@ async function seedFixtures() {
   // Seed canvases
   const canvasCount = await db.get(`SELECT COUNT(*) as count FROM canvases`);
   if (canvasCount.count === 0) {
-    await db.run(`INSERT INTO canvases (id, title, question, created_at) VALUES ('can_1', 'Freemium Launch Decision', 'Should we launch a freemium tier?', ?)`, [new Date().toISOString()]);
-    await db.run(`INSERT INTO canvases (id, title, question, created_at) VALUES ('can_2', 'Q2 Pricing Strategy', 'How should we adjust pricing for enterprise tiers?', ?)`, [new Date(Date.now() - 172800000).toISOString()]);
+    await db.run(`INSERT INTO canvases (id, user_id, title, question, created_at) VALUES ('can_1', 'default_user', 'Freemium Launch Decision', 'Should we launch a freemium tier?', ?)`, [new Date().toISOString()]);
+    await db.run(`INSERT INTO canvases (id, user_id, title, question, created_at) VALUES ('can_2', 'default_user', 'Q2 Pricing Strategy', 'How should we adjust pricing for enterprise tiers?', ?)`, [new Date(Date.now() - 172800000).toISOString()]);
   }
 
   console.log('Fixtures seeded successfully.');

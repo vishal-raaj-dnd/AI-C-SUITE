@@ -81,7 +81,7 @@ export type LLMResult = {
 };
 
 export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
-  const modelName = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
+  const modelName = process.env.GROQ_MODEL || process.env.OPENROUTER_MODEL || 'llama-3.1-8b-instant';
   const geminiApiKey = process.env.GEMINI_API_KEY;
   const groqApiKey = process.env.GROQ_API_KEY;
   const startTime = Date.now();
@@ -95,8 +95,59 @@ export async function callLLM(opts: CallLLMOpts): Promise<LLMResult> {
     const modelLower = modelName.toLowerCase();
     const isGeminiModel = modelLower.includes('gemini') || modelLower.includes('google');
     const isGroqModel = modelLower.includes('llama') || modelLower.includes('mixtral') || modelLower.includes('groq');
+    const routeOpenRouter = modelName.includes('/') && openRouterApiKey && openRouterApiKey.trim().length > 0;
 
-    if (isGeminiModel && geminiApiKey && geminiApiKey.trim().length > 0) {
+    if (routeOpenRouter) {
+      console.log(`[LLM] OpenRouter API execution for model: ${modelName}`);
+      const messages = [];
+      if (opts.system) {
+        messages.push({ role: 'system', content: opts.system });
+      }
+      messages.push({ role: 'user', content: opts.prompt });
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openRouterApiKey}`,
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'Quorum Board Decision Platform'
+      };
+
+      const body: any = {
+        model: modelName,
+        messages,
+        temperature: 0.2
+      };
+
+      if (opts.maxTokens) {
+        body.max_tokens = opts.maxTokens;
+      }
+
+      if (opts.schema) {
+        body.response_format = { type: 'json_object' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+      }
+
+      const resJson = await response.json();
+      text = resJson.choices?.[0]?.message?.content || '';
+      tokensIn = resJson.usage?.prompt_tokens || 0;
+      tokensOut = resJson.usage?.completion_tokens || 0;
+    } else if (isGeminiModel && geminiApiKey && geminiApiKey.trim().length > 0) {
       // Direct Google Gemini SDK execution
       try {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });

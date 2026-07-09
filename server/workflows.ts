@@ -2,7 +2,7 @@ import { callLLM, InitialBriefSchema, CardOutputSchema, ContrarianCardOutputSche
 import { retrieveKb } from './db.js';
 import { webSearch, tableQuery, drLookup } from './tools.js';
 
-const activeModel = process.env.OPENROUTER_MODEL || 'nvidia/llama-3.1-nemotron-70b-instruct:free';
+const activeModel = process.env.GROQ_MODEL || process.env.OPENROUTER_MODEL || 'llama-3.1-8b-instant';
 
 export type InitialBrief = {
   advisor_id: string;
